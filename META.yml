@@ -1,0 +1,26 @@
+---
+abstract: 'XSLT transformations with Plack'
+author:
+  - 'Nick Wellnhofer <wellnhofer@aevum.de>'
+build_requires: {}
+configure_requires:
+  ExtUtils::MakeMaker: 6.31
+dynamic_config: 0
+generated_by: 'Dist::Zilla version 4.102342, CPAN::Meta::Converter version 2.102400'
+license: perl
+meta-spec:
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4
+name: Plack-Middleware-XSLT
+requires:
+  HTTP::Exception: 0
+  Plack: 0
+  Try::Tiny: 0
+  URI: 0
+  XML::LibXML: 0
+  XML::LibXML::XPathContext: 0
+  XML::LibXSLT: 0
+  perl: 5.008
+resources:
+  repository: http://github.com/nwellnhof/Plack-Middleware-XSLT
+version: 0.10000
