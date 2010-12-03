@@ -1,6 +1,6 @@
 package Plack::Middleware::XSLT;
 BEGIN {
-  $Plack::Middleware::XSLT::VERSION = '0.10000';
+  $Plack::Middleware::XSLT::VERSION = '0.10001';
 }
 use strict;
 
@@ -38,7 +38,7 @@ sub abs_style {
 
     if (!File::Spec->file_name_is_absolute($style)) {
         my $path = $self->path;
-        $style = File::Spec->rel2abs($style, $path) if defined($path);
+        $style = File::Spec->catdir($path, $style) if defined($path);
     }
 
     return Cwd::abs_path($style);
@@ -143,7 +143,11 @@ sub parse_stylesheet_file {
             while (my ($path, $cached_time) = each(%$deps)) {
                 my @stat = stat($path);
                 my $mtime = @stat ? $stat[9] : -1;
-                $stale = $mtime != $cached_time;
+
+                if ($mtime != $cached_time) {
+                    $stale = 1;
+                    last;
+                }
             }
 
             if (!$stale) {
@@ -230,7 +234,7 @@ Plack::Middleware::XSLT - XSLT transformations with Plack
 
 =head1 VERSION
 
-version 0.10000
+version 0.10001
 
 =head1 SYNOPSIS
 

@@ -11,7 +11,10 @@ use ExtUtils::MakeMaker 6.31;
 my %WriteMakefileArgs = (
   'ABSTRACT' => 'XSLT transformations with Plack',
   'AUTHOR' => 'Nick Wellnhofer <wellnhofer@aevum.de>',
-  'BUILD_REQUIRES' => {},
+  'BUILD_REQUIRES' => {
+    'File::Touch' => '0',
+    'HTTP::Request::Common' => '0'
+  },
   'CONFIGURE_REQUIRES' => {
     'ExtUtils::MakeMaker' => '6.31'
   },
@@ -28,7 +31,7 @@ my %WriteMakefileArgs = (
     'XML::LibXML::XPathContext' => '0',
     'XML::LibXSLT' => '0'
   },
-  'VERSION' => '0.10000',
+  'VERSION' => '0.10001',
   'test' => {
     'TESTS' => 't/*.t'
   }
