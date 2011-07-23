@@ -1,6 +1,6 @@
 package Plack::Middleware::XSLT;
 BEGIN {
-  $Plack::Middleware::XSLT::VERSION = '0.10001';
+  $Plack::Middleware::XSLT::VERSION = '0.10002';
 }
 use strict;
 
@@ -234,7 +234,7 @@ Plack::Middleware::XSLT - XSLT transformations with Plack
 
 =head1 VERSION
 
-version 0.10001
+version 0.10002
 
 =head1 SYNOPSIS
 
@@ -283,7 +283,7 @@ Nick Wellnhofer <wellnhofer@aevum.de>
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is copyright (c) 2010 by Nick Wellnhofer.
+This software is copyright (c) 2011 by Nick Wellnhofer.
 
 This is free software; you can redistribute it and/or modify it under
 the same terms as the Perl 5 programming language system itself.

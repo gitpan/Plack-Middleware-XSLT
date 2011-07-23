@@ -2,9 +2,9 @@
 use strict;
 use warnings;
 
-BEGIN { require 5.008; }
+use 5.008;
 
-use ExtUtils::MakeMaker 6.31;
+use ExtUtils::MakeMaker 6.30;
 
 
 
@@ -13,10 +13,11 @@ my %WriteMakefileArgs = (
   'AUTHOR' => 'Nick Wellnhofer <wellnhofer@aevum.de>',
   'BUILD_REQUIRES' => {
     'File::Touch' => '0',
-    'HTTP::Request::Common' => '0'
+    'HTTP::Request::Common' => '0',
+    'Test::Deep' => '0'
   },
   'CONFIGURE_REQUIRES' => {
-    'ExtUtils::MakeMaker' => '6.31'
+    'ExtUtils::MakeMaker' => '6.30'
   },
   'DISTNAME' => 'Plack-Middleware-XSLT',
   'EXE_FILES' => [],
@@ -31,7 +32,7 @@ my %WriteMakefileArgs = (
     'XML::LibXML::XPathContext' => '0',
     'XML::LibXSLT' => '0'
   },
-  'VERSION' => '0.10001',
+  'VERSION' => '0.10002',
   'test' => {
     'TESTS' => 't/*.t'
   }
