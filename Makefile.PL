@@ -26,13 +26,14 @@ my %WriteMakefileArgs = (
   'PREREQ_PM' => {
     'HTTP::Exception' => '0',
     'Plack' => '0',
+    'Plack::Response' => '0',
     'Try::Tiny' => '0',
     'URI' => '0',
     'XML::LibXML' => '0',
     'XML::LibXML::XPathContext' => '0',
     'XML::LibXSLT' => '0'
   },
-  'VERSION' => '0.10002',
+  'VERSION' => '0.10003',
   'test' => {
     'TESTS' => 't/*.t'
   }

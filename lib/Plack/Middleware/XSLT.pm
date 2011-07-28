@@ -1,6 +1,6 @@
 package Plack::Middleware::XSLT;
 BEGIN {
-  $Plack::Middleware::XSLT::VERSION = '0.10002';
+  $Plack::Middleware::XSLT::VERSION = '0.10003';
 }
 use strict;
 
@@ -234,7 +234,7 @@ Plack::Middleware::XSLT - XSLT transformations with Plack
 
 =head1 VERSION
 
-version 0.10002
+version 0.10003
 
 =head1 SYNOPSIS
 
