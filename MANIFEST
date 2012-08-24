@@ -7,8 +7,8 @@ README
 dist.ini
 lib/Plack/Middleware/XSLT.pm
 t/cache.t
+t/release-pod-coverage.t
 t/release-pod-syntax.t
-t/xml/dependencies.xml
 t/xml/doc.xml
 t/xsl/import.xsl
 t/xsl/import_import.xsl

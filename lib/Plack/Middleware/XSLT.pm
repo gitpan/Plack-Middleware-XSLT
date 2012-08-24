@@ -1,6 +1,6 @@
 package Plack::Middleware::XSLT;
-BEGIN {
-  $Plack::Middleware::XSLT::VERSION = '0.10003';
+{
+  $Plack::Middleware::XSLT::VERSION = '0.20000';
 }
 use strict;
 
@@ -8,62 +8,30 @@ use strict;
 
 use parent 'Plack::Middleware';
 
-use Cwd ();
-use File::Spec;
 use HTTP::Exception;
 use Plack::Response;
-use Plack::Util::Accessor qw(cache path);
+use Plack::Util::Accessor qw(cache path parser_options);
 use Try::Tiny;
-use URI;
-use XML::LibXML;
-use XML::LibXSLT;
+use XML::LibXML 1.62;
+use XML::LibXSLT 1.62;
 
-my $parser = XML::LibXML->new();
-$parser->no_network(1) if $XML::LibXML::VERSION >= 1.63;
-# work-around to fix indenting
-$parser->keep_blanks(0) if $XML::LibXML::VERSION < 1.70;
-
-my $xslt = XML::LibXSLT->new();
-my $icb = XML::LibXML::InputCallback->new();
-$icb->register_callbacks([ \&match_cb, \&open_cb, \&read_cb, \&close_cb ]);
-$xslt->input_callbacks($icb);
-
-my (%cache, $dependencies, $deps_ok);
-my $cache_hits = 0;
-
-# Returns the absolute path of a stylesheet file
-
-sub abs_style {
-    my ($self, $style) = @_;
-
-    if (!File::Spec->file_name_is_absolute($style)) {
-        my $path = $self->path;
-        $style = File::Spec->catdir($path, $style) if defined($path);
-    }
-
-    return Cwd::abs_path($style);
-}
+my ($parser, $xslt);
 
 sub call {
     my ($self, $env) = @_;
 
-    my $r = $self->app->($env);
-
+    my $r     = $self->app->($env);
     my $style = $env->{'xslt.style'};
 
     return $r if !defined($style) || $style eq '';
 
+    my $path = $self->path;
+    $style = "$path/$style" if defined($path);
+
     my ($status, $headers, $body) = @$r;
     my $doc = $self->_parse_body($body);
 
-    my ($output, $media_type, $encoding) = $self->xform($style, $doc);
-
-    if($XML::LibXSLT::VERSION < 1.61 && $media_type eq 'text/html') {
-        # <xsl:terminate terminate="yes"> doesn't die in XML::LibXSLT
-        # versions before 1.61
-
-        HTTP::Exception::NOT_FOUND->throw() if $output !~ /<body/;
-    }
+    my ($output, $media_type, $encoding) = $self->_xform($style, $doc);
 
     my $res = Plack::Response->new($status, $headers, $output);
     $res->content_type("$media_type; charset=$encoding");
@@ -72,10 +40,20 @@ sub call {
     return $res->finalize();
 }
 
-sub xform {
+sub _xform {
     my ($self, $style, $doc) = @_;
 
-    my $stylesheet = $self->parse_stylesheet_file($style);
+    if (!$xslt) {
+        if ($self->cache) {
+            require XML::LibXSLT::Cache;
+            $xslt = XML::LibXSLT::Cache->new;
+        }
+        else {
+            $xslt = XML::LibXSLT->new;
+        }
+    }
+
+    my $stylesheet = $xslt->parse_stylesheet_file($style);
 
     my $result = try {
         $stylesheet->transform($doc) or die("XSLT transform failed: $!");
@@ -87,16 +65,9 @@ sub xform {
         die($_);
     };
 
-    my $output = $stylesheet->output_string($result);
+    my $output     = $stylesheet->output_as_bytes($result);
     my $media_type = $stylesheet->media_type();
-    my $encoding = $stylesheet->output_encoding();
-
-    #utf8::encode($output) if utf8::is_utf8($output);
-
-    # Hack for old libxslt versions and imported stylesheets
-    $media_type = 'text/html' if $media_type eq 'text/xml' && (
-        $XML::LibXSLT::VERSION < 1.62 ||
-        XML::LibXSLT::LIBXSLT_VERSION() < 10125);
+    my $encoding   = $stylesheet->output_encoding();
 
     return ($output, $media_type, $encoding);
 }
@@ -104,123 +75,35 @@ sub xform {
 sub _parse_body {
     my ($self, $body) = @_;
 
+    if (!$parser) {
+        my $options = $self->parser_options;
+        $parser = $options
+                ? XML::LibXML->new($options)
+                : XML::LibXML->new;
+    }
+
     my $doc;
 
-    if (Plack::Util::is_real_fh($body)) {
-        die('fh not supported');
-    }
-    elsif (ref($body) eq 'ARRAY') {
+    if (ref($body) eq 'ARRAY') {
         my $xml = join('', @$body);
 
         $doc = $parser->parse_string($xml);
     }
     else {
-        die("unknown body type: $body");
+        $doc = $parser->parse_fh($body);
     }
 
     return $doc;
 }
 
-sub parse_stylesheet_file {
-    my ($self, $style) = @_;
+sub _cache_hits {
+    my $self = shift;
 
-    my $filename = $self->abs_style($style);
+    return $xslt->cache_hits
+        if $xslt && $xslt->isa('XML::LibXSLT::Cache');
 
-    return $xslt->parse_stylesheet_file($filename) if !$self->cache;
-
-    my @stat = stat($filename) or die("stat: $!");
-    my $mtime = $stat[9];
-    my $cache_rec = $cache{$filename};
-
-    if ($cache_rec) {
-        my ($cached_ss, $cached_time, $deps) = @$cache_rec;
-
-        if ($mtime == $cached_time) {
-            # check mtimes of dependencies
-
-            my $stale;
-
-            while (my ($path, $cached_time) = each(%$deps)) {
-                my @stat = stat($path);
-                my $mtime = @stat ? $stat[9] : -1;
-
-                if ($mtime != $cached_time) {
-                    $stale = 1;
-                    last;
-                }
-            }
-
-            if (!$stale) {
-                ++$cache_hits;
-                return $cached_ss;
-            }
-        }
-    }
-
-    $dependencies = {};
-    $deps_ok = 1;
-
-    my $stylesheet = $xslt->parse_stylesheet_file($filename);
-
-    goto no_store if !$deps_ok;
-
-    delete($dependencies->{$filename});
-
-    $cache_rec = [ $stylesheet, $mtime, $dependencies ];
-    $cache{$filename} = $cache_rec;
-    $dependencies = undef;
-
-    return $stylesheet;
-
-no_store:
-    delete($cache{$filename});
-    $dependencies = undef;
-
-    return $stylesheet;
+    return 0;
 }
-
-sub cache_record {
-    my ($self, $style) = @_;
-
-    my $filename = $self->abs_style($style);
-    my $cache_rec = $cache{$filename} or return ();
-
-    return @$cache_rec;
-}
-
-sub cache_hits {
-    return $cache_hits;
-}
-
-# Handling of dependencies
-
-# We register an input callback that never matches but records all URIs
-# that are accessed during parsing of the stylesheet.
-
-sub match_cb {
-    my $uri_str = shift;
-
-    return undef if !$dependencies;
-
-    my $uri = URI->new($uri_str, 'file');
-    my $scheme = $uri->scheme;
-
-    if (!defined($scheme) || $scheme eq 'file') {
-        my $path = Cwd::abs_path($uri->path);
-        my @stat = stat($path);
-        $dependencies->{$path} = @stat ? $stat[9] : -1;
-    }
-    else {
-        $deps_ok = undef;
-    }
-
-    return undef;
-}
-
-# should never be called
-sub open_cb { die('open callback called'); }
-sub read_cb { die('read callback called'); }
-sub close_cb { die('close callback called'); }
 
 1;
 
@@ -234,7 +117,7 @@ Plack::Middleware::XSLT - XSLT transformations with Plack
 
 =head1 VERSION
 
-version 0.10003
+version 0.20000
 
 =head1 SYNOPSIS
 
@@ -262,6 +145,12 @@ adjusted.
 
 =over 4
 
+=item cache
+
+    enable 'XSLT', cache => 1;
+
+Enables caching of XSLT stylesheets. Defaults to false.
+
 =item path
 
     enable 'XSLT', path => 'path/to/xsl/files';
@@ -269,11 +158,12 @@ adjusted.
 Sets a path that will be prepended if xslt.style contains a relative path.
 Defaults to the current directory.
 
-=item cache
+=item parser_options
 
-    enable 'XSLT', cache => 1;
+    enable 'XSLT', parser_options => \%options;
 
-Enables caching of XSLT stylesheets. Defaults to false.
+Options that will be passed to the XML parser when parsing the input
+document. See L<XML::LibXML::Parser/"Parser-Options">.
 
 =back
 
@@ -283,7 +173,7 @@ Nick Wellnhofer <wellnhofer@aevum.de>
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is copyright (c) 2011 by Nick Wellnhofer.
+This software is copyright (c) 2012 by Nick Wellnhofer.
 
 This is free software; you can redistribute it and/or modify it under
 the same terms as the Perl 5 programming language system itself.

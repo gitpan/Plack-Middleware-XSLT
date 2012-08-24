@@ -9,33 +9,32 @@ use ExtUtils::MakeMaker 6.30;
 
 
 my %WriteMakefileArgs = (
-  'ABSTRACT' => 'XSLT transformations with Plack',
-  'AUTHOR' => 'Nick Wellnhofer <wellnhofer@aevum.de>',
-  'BUILD_REQUIRES' => {
-    'File::Touch' => '0',
-    'HTTP::Request::Common' => '0',
-    'Test::Deep' => '0'
+  "ABSTRACT" => "XSLT transformations with Plack",
+  "AUTHOR" => "Nick Wellnhofer <wellnhofer\@aevum.de>",
+  "BUILD_REQUIRES" => {
+    "File::Touch" => 0,
+    "HTTP::Request::Common" => 0,
+    "Test::Deep" => 0,
+    "XML::LibXML::Cache" => "0.12"
   },
-  'CONFIGURE_REQUIRES' => {
-    'ExtUtils::MakeMaker' => '6.30'
+  "CONFIGURE_REQUIRES" => {
+    "ExtUtils::MakeMaker" => "6.30"
   },
-  'DISTNAME' => 'Plack-Middleware-XSLT',
-  'EXE_FILES' => [],
-  'LICENSE' => 'perl',
-  'NAME' => 'Plack::Middleware::XSLT',
-  'PREREQ_PM' => {
-    'HTTP::Exception' => '0',
-    'Plack' => '0',
-    'Plack::Response' => '0',
-    'Try::Tiny' => '0',
-    'URI' => '0',
-    'XML::LibXML' => '0',
-    'XML::LibXML::XPathContext' => '0',
-    'XML::LibXSLT' => '0'
+  "DISTNAME" => "Plack-Middleware-XSLT",
+  "EXE_FILES" => [],
+  "LICENSE" => "perl",
+  "NAME" => "Plack::Middleware::XSLT",
+  "PREREQ_PM" => {
+    "HTTP::Exception" => 0,
+    "Plack" => 0,
+    "Plack::Response" => 0,
+    "Try::Tiny" => 0,
+    "XML::LibXML" => "1.62",
+    "XML::LibXSLT" => "1.62"
   },
-  'VERSION' => '0.10003',
-  'test' => {
-    'TESTS' => 't/*.t'
+  "VERSION" => "0.20000",
+  "test" => {
+    "TESTS" => "t/*.t"
   }
 );
 
