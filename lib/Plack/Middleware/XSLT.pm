@@ -1,6 +1,6 @@
 package Plack::Middleware::XSLT;
 {
-  $Plack::Middleware::XSLT::VERSION = '0.20000';
+  $Plack::Middleware::XSLT::VERSION = '0.20001';
 }
 use strict;
 
@@ -8,7 +8,8 @@ use strict;
 
 use parent 'Plack::Middleware';
 
-use HTTP::Exception;
+use File::Spec;
+use HTTP::Exception ();
 use Plack::Response;
 use Plack::Util::Accessor qw(cache path parser_options);
 use Try::Tiny;
@@ -26,7 +27,8 @@ sub call {
     return $r if !defined($style) || $style eq '';
 
     my $path = $self->path;
-    $style = "$path/$style" if defined($path);
+    $style = File::Spec->catfile($path, $style)
+        if defined($path) && !File::Spec->file_name_is_absolute($style);
 
     my ($status, $headers, $body) = @$r;
     my $doc = $self->_parse_body($body);
@@ -117,7 +119,7 @@ Plack::Middleware::XSLT - XSLT transformations with Plack
 
 =head1 VERSION
 
-version 0.20000
+version 0.20001
 
 =head1 SYNOPSIS
 
@@ -163,7 +165,7 @@ Defaults to the current directory.
     enable 'XSLT', parser_options => \%options;
 
 Options that will be passed to the XML parser when parsing the input
-document. See L<XML::LibXML::Parser/"Parser-Options">.
+document. See L<XML::LibXML::Parser/"PARSER OPTIONS">.
 
 =back
 
@@ -173,7 +175,7 @@ Nick Wellnhofer <wellnhofer@aevum.de>
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is copyright (c) 2012 by Nick Wellnhofer.
+This software is copyright (c) 2013 by Nick Wellnhofer.
 
 This is free software; you can redistribute it and/or modify it under
 the same terms as the Perl 5 programming language system itself.
