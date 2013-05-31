@@ -1,6 +1,6 @@
 package Plack::Middleware::XSLT;
 {
-  $Plack::Middleware::XSLT::VERSION = '0.20001';
+  $Plack::Middleware::XSLT::VERSION = '0.20002';
 }
 use strict;
 
@@ -119,7 +119,7 @@ Plack::Middleware::XSLT - XSLT transformations with Plack
 
 =head1 VERSION
 
-version 0.20001
+version 0.20002
 
 =head1 SYNOPSIS
 
@@ -168,6 +168,12 @@ Options that will be passed to the XML parser when parsing the input
 document. See L<XML::LibXML::Parser/"PARSER OPTIONS">.
 
 =back
+
+=head1 HTTP EXCEPTIONS
+
+If the transform exits via C<<xsl:message terminate="yes">> and the
+message contains a line starting with a three-digit HTTP response status
+code, a corresponding L<HTTP::Exception> is thrown.
 
 =head1 AUTHOR
 
