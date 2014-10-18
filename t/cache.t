@@ -1,8 +1,6 @@
-#! perl -w
 use strict;
 
-use Test::More tests => 14;
-use Test::Deep;
+use Test::More tests => 15;
 
 BEGIN {
     use_ok('Plack::Middleware::XSLT');
@@ -70,6 +68,7 @@ test_psgi $app, sub {
     is($content, $expected_content, 'response content');
     is($res->code, 200, 'response code');
     is($res->content_type, 'text/html', 'response content type');
+    is($res->content_length, length($res->content), 'response content length');
     is(lc($res->content_type_charset), 'utf-8', 'response charset');
     is($xslt->_cache_hits, 0, 'cache hits before');
 

@@ -1,16 +1,16 @@
 package Plack::Middleware::XSLT;
 {
-  $Plack::Middleware::XSLT::VERSION = '0.20002';
+  $Plack::Middleware::XSLT::VERSION = '0.30';
 }
 use strict;
+use warnings;
 
 # ABSTRACT: XSLT transformations with Plack
 
 use parent 'Plack::Middleware';
 
 use File::Spec;
-use HTTP::Exception ();
-use Plack::Response;
+use Plack::Util;
 use Plack::Util::Accessor qw(cache path parser_options);
 use Try::Tiny;
 use XML::LibXML 1.62;
@@ -21,61 +21,93 @@ my ($parser, $xslt);
 sub call {
     my ($self, $env) = @_;
 
-    my $r     = $self->app->($env);
-    my $style = $env->{'xslt.style'};
+    my $res = $self->app->($env);
 
-    return $r if !defined($style) || $style eq '';
+    Plack::Util::response_cb($res, sub {
+        my $res = shift;
 
-    my $path = $self->path;
-    $style = File::Spec->catfile($path, $style)
-        if defined($path) && !File::Spec->file_name_is_absolute($style);
+        my $xsl_file = $env->{'xslt.style'};
+        return if !defined($xsl_file) || $xsl_file eq '';
 
-    my ($status, $headers, $body) = @$r;
-    my $doc = $self->_parse_body($body);
+        if (!$xslt) {
+            if ($self->cache) {
+                require XML::LibXSLT::Cache;
+                $xslt = XML::LibXSLT::Cache->new;
+            }
+            else {
+                $xslt = XML::LibXSLT->new;
+            }
+        }
 
-    my ($output, $media_type, $encoding) = $self->_xform($style, $doc);
+        my $path = $self->path;
+        $xsl_file = File::Spec->catfile($path, $xsl_file)
+            if defined($path) && !File::Spec->file_name_is_absolute($xsl_file);
 
-    my $res = Plack::Response->new($status, $headers, $output);
-    $res->content_type("$media_type; charset=$encoding");
-    $res->content_length(length($output));
+        my $stylesheet = $xslt->parse_stylesheet_file($xsl_file);
+        my $media_type = $stylesheet->media_type();
+        my $encoding   = $stylesheet->output_encoding();
 
-    return $res->finalize();
+        my $headers = Plack::Util::headers($res->[1]);
+        $headers->remove('Content-Encoding');
+        $headers->remove('Transfer-Encoding');
+        $headers->set('Content-Type', "$media_type; charset=$encoding");
+
+        if ($res->[2]) {
+            my ($output, $error) = $self->_xform($stylesheet, $res->[2]);
+
+            if (defined($error)) {
+                # Try to convert error to HTTP response.
+
+                my ($status, $message);
+
+                for my $line (split(/\n/, $error)) {
+                    if ($line =~ /^(\d\d\d)(?:\s+(.*))?\z/) {
+                        $status  = $1;
+                        $message = defined($2) ? $2 : '';
+                        last;
+                    }
+                }
+
+                die($error) if !defined($status);
+
+                $res->[0] = $status;
+                $headers->set('Content-Type', 'text/plain');
+                $headers->set('Content-Length', length($message));
+                $res->[2] = [ $message ];
+            }
+            else {
+                $headers->set('Content-Length', length($output));
+                $res->[2] = [ $output ];
+            }
+        }
+        else {
+            # PSGI streaming
+
+            my ($done, @chunks);
+
+            return sub {
+                my $chunk = shift;
+
+                return undef if $done;
+
+                if (defined($chunk)) {
+                    push(@chunks, $chunk);
+                    return '';
+                }
+                else {
+                    $done = 1;
+                    my ($output, $error) =
+                        $self->_xform($stylesheet, \@chunks);
+                    die($error) if defined($error);
+                    return $output;
+                }
+            }
+        }
+    });
 }
 
 sub _xform {
-    my ($self, $style, $doc) = @_;
-
-    if (!$xslt) {
-        if ($self->cache) {
-            require XML::LibXSLT::Cache;
-            $xslt = XML::LibXSLT::Cache->new;
-        }
-        else {
-            $xslt = XML::LibXSLT->new;
-        }
-    }
-
-    my $stylesheet = $xslt->parse_stylesheet_file($style);
-
-    my $result = try {
-        $stylesheet->transform($doc) or die("XSLT transform failed: $!");
-    }
-    catch {
-        for my $line (split(/\n/, $_)) {
-            HTTP::Exception->throw($1) if $line =~ /^(\d\d\d)(?:\s|\z)/;
-        }
-        die($_);
-    };
-
-    my $output     = $stylesheet->output_as_bytes($result);
-    my $media_type = $stylesheet->media_type();
-    my $encoding   = $stylesheet->output_encoding();
-
-    return ($output, $media_type, $encoding);
-}
-
-sub _parse_body {
-    my ($self, $body) = @_;
+    my ($self, $stylesheet, $body) = @_;
 
     if (!$parser) {
         my $options = $self->parser_options;
@@ -84,18 +116,27 @@ sub _parse_body {
                 : XML::LibXML->new;
     }
 
-    my $doc;
+    my ($doc, $output, $error);
 
     if (ref($body) eq 'ARRAY') {
-        my $xml = join('', @$body);
-
-        $doc = $parser->parse_string($xml);
+        $doc = $parser->parse_string(join('', @$body));
     }
     else {
         $doc = $parser->parse_fh($body);
     }
 
-    return $doc;
+    my $result = try {
+        $stylesheet->transform($doc) or die("XSLT transform failed: $!");
+    }
+    catch {
+        $error = defined($_) ? $_ : 'Unknown error';
+        undef;
+    };
+
+    $output = $stylesheet->output_as_bytes($result)
+        if $result;
+
+    return ($output, $error);
 }
 
 sub _cache_hits {
@@ -109,9 +150,11 @@ sub _cache_hits {
 
 1;
 
-
+__END__
 
 =pod
+
+=encoding UTF-8
 
 =head1 NAME
 
@@ -119,7 +162,7 @@ Plack::Middleware::XSLT - XSLT transformations with Plack
 
 =head1 VERSION
 
-version 0.20002
+version 0.30
 
 =head1 SYNOPSIS
 
@@ -169,11 +212,14 @@ document. See L<XML::LibXML::Parser/"PARSER OPTIONS">.
 
 =back
 
-=head1 HTTP EXCEPTIONS
+=head1 CREATING HTTP ERRORS WITH XSL:MESSAGE
 
 If the transform exits via C<<xsl:message terminate="yes">> and the
 message contains a line starting with a three-digit HTTP response status
-code, a corresponding L<HTTP::Exception> is thrown.
+code and an optional message, a corresponding HTTP error response is
+created. For example:
+
+    <xsl:message terminate="yes">404 Not found</xsl:message>
 
 =head1 AUTHOR
 
@@ -181,14 +227,9 @@ Nick Wellnhofer <wellnhofer@aevum.de>
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is copyright (c) 2013 by Nick Wellnhofer.
+This software is copyright (c) 2014 by Nick Wellnhofer.
 
 This is free software; you can redistribute it and/or modify it under
 the same terms as the Perl 5 programming language system itself.
 
 =cut
-
-
-__END__
-
-
